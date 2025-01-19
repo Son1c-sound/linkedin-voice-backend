@@ -1,0 +1,66 @@
+import { MongoClient, ObjectId } from "mongodb"
+import OpenAI from "openai"
+import { NextResponse } from "next/server"
+import { optimizeSchema } from "@/lib/validation"
+
+const uri: string = process.env.MONGO_URI!
+const dbName: string = process.env.AUTH_DB_NAME!
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { transcriptionId } = await optimizeSchema.validate(body);
+    
+    const client = new MongoClient(uri)
+    await client.connect()
+    const db = client.db(dbName)
+
+    const _id = new ObjectId(transcriptionId);
+
+    const transcription = await db.collection("transcriptions").findOne({ _id });
+
+    if (!transcription) {
+      await client.close();
+      return NextResponse.json({ error: "Transcription not found" }, { status: 404 });
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are a professional content optimizer for LinkedIn posts. Maintain the core message while making it more engaging and professional."
+        },
+        {
+          role: "user",
+          content: transcription.text
+        }
+      ]
+    })
+
+    const optimizedText = completion.choices[0].message.content
+
+    await db.collection("transcriptions").updateOne(
+      { _id }, 
+      { 
+        $set: { 
+          optimizedText,
+          status: "optimized",
+          updatedAt: new Date()
+        }
+      }
+    )
+
+    await client.close()
+
+    return NextResponse.json({ 
+      success: true,
+      optimizedText 
+    })
+
+  } catch (error) {
+    console.error("Optimization error:", error)
+    return NextResponse.json({ error: "Failed to optimize text" }, { status: 500 })
+  }
+}
