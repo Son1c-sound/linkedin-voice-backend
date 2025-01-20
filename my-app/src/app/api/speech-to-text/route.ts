@@ -2,6 +2,7 @@ import { audioSchema } from './../../../lib/validation'
 import { MongoClient } from "mongodb"
 import OpenAI from "openai"
 import { NextResponse } from "next/server"
+import axios from "axios"  // We can use axios to send raw data to the API
 
 const uri: string = process.env.MONGO_URI!
 const dbName: string = process.env.AUTH_DB_NAME!
@@ -19,17 +20,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: errorMessage }, { status: 400 })
     }
 
+    // Read the audio file into a buffer directly
     const arrayBuffer = await audioFile.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const buffer = Buffer.from(arrayBuffer)  // Convert the file to buffer
 
-    // Create a Blob to simulate the File-like object
-    const blob = new Blob([buffer], { type: 'audio/wav' })
-    const file = new File([blob], 'audio.wav', { type: 'audio/wav' })
+    // Send the buffer directly to OpenAI API using axios
+    const response = await axios.post(
+      "https://api.openai.com/v1/audio/transcriptions",  // OpenAI API endpoint for transcriptions
+      buffer,
+      {
+        headers: {
+          'Content-Type': 'audio/wav',  // Set content type to match audio format
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        maxRedirects: 0,  // Optional: Disable redirects for this request
+      }
+    )
 
-    const transcription = await openai.audio.transcriptions.create({
-      file: file, // Use the simulated File object
-      model: "whisper-1",
-    })
+    const transcription = response.data
 
     const client = new MongoClient(uri)
     await client.connect()
