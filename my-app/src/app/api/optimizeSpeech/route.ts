@@ -7,64 +7,89 @@ const uri: string = process.env.MONGO_URI!
 const dbName: string = process.env.AUTH_DB_NAME!
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
+// Define CORS headers
+const corsHeaders = {
+ 'Access-Control-Allow-Credentials': 'true',
+ 'Access-Control-Allow-Origin': '*', 
+ 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+ 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version',
+}
+
 export async function OPTIONS() {
-  return NextResponse.json({}, { status: 200 })
+ return new NextResponse(null, {
+   status: 204,
+   headers: corsHeaders
+ })
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { transcriptionId } = await optimizeSchema.validate(body);
-    
-    const client = new MongoClient(uri)
-    await client.connect()
-    const db = client.db(dbName)
+ try {
+   const body = await req.json();
+   const { transcriptionId } = await optimizeSchema.validate(body);
+   
+   const client = new MongoClient(uri)
+   await client.connect()
+   const db = client.db(dbName)
 
-    const _id = new ObjectId(transcriptionId);
+   const _id = new ObjectId(transcriptionId);
 
-    const transcription = await db.collection("transcriptions").findOne({ _id });
+   const transcription = await db.collection("transcriptions").findOne({ _id });
 
-    if (!transcription) {
-      await client.close();
-      return NextResponse.json({ error: "Transcription not found" }, { status: 404 });
-    }
+   if (!transcription) {
+     await client.close();
+     return NextResponse.json(
+       { error: "Transcription not found" }, 
+       { 
+         status: 404,
+         headers: corsHeaders 
+       }
+     );
+   }
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "You are a professional content optimizer for LinkedIn posts. Maintain the core message while making it more engaging and professional."
-        },
-        {
-          role: "user",
-          content: transcription.text
-        }
-      ]
-    })
+   const completion = await openai.chat.completions.create({
+     model: "gpt-4",
+     messages: [
+       {
+         role: "system",
+         content: "You are a professional content optimizer for LinkedIn posts. Maintain the core message while making it more engaging and professional."
+       },
+       {
+         role: "user",
+         content: transcription.text
+       }
+     ]
+   })
 
-    const optimizedText = completion.choices[0].message.content
+   const optimizedText = completion.choices[0].message.content
 
-    await db.collection("transcriptions").updateOne(
-      { _id }, 
-      { 
-        $set: { 
-          optimizedText,
-          status: "optimized",
-          updatedAt: new Date()
-        }
-      }
-    )
+   await db.collection("transcriptions").updateOne(
+     { _id }, 
+     { 
+       $set: { 
+         optimizedText,
+         status: "optimized",
+         updatedAt: new Date()
+       }
+     }
+   )
 
-    await client.close()
+   await client.close()
 
-    return NextResponse.json({ 
-      success: true,
-      optimizedText 
-    })
+   return NextResponse.json({ 
+     success: true,
+     optimizedText 
+   }, {
+     headers: corsHeaders
+   })
 
-  } catch (error) {
-    console.error("Optimization error:", error)
-    return NextResponse.json({ error: "Failed to optimize text" }, { status: 500 })
-  }
+ } catch (error) {
+   console.error("Optimization error:", error)
+   return NextResponse.json(
+     { error: "Failed to optimize text" }, 
+     { 
+       status: 500,
+       headers: corsHeaders
+     }
+   )
+ }
 }
