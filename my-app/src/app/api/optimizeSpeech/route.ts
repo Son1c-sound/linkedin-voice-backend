@@ -7,7 +7,7 @@ const uri: string = process.env.MONGO_URI!
 const dbName: string = process.env.AUTH_DB_NAME!
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-// Define CORS headers
+
 const corsHeaders = {
  'Access-Control-Allow-Credentials': 'true',
  'Access-Control-Allow-Origin': '*', 

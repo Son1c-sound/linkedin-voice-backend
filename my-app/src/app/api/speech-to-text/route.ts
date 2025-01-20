@@ -7,7 +7,7 @@ const uri: string = process.env.MONGO_URI!
 const dbName: string = process.env.AUTH_DB_NAME!
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-// Add OPTIONS handler for CORS preflight
+
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
