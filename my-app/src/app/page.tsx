@@ -66,12 +66,22 @@ export default function TestClient() {
     try {
       const formData = new FormData();
       formData.append('audioData', audioBlob);
-
+      
       const response = await fetch('https://linkedin-voice-backend.vercel.app/api/speech-to-text', {
         method: 'POST',
         body: formData,
+        // Add these headers for better error handling
+        headers: {
+          'Accept': 'application/json',
+        },
       });
-
+  
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        const errorText = await response.text(); // Try to get error text
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
+  
       const data: SpeechToTextResponse = await response.json();
       if (data.success) {
         setTranscriptionId(data.transcriptionId || '');
@@ -81,10 +91,15 @@ export default function TestClient() {
         throw new Error(data.error || 'Unknown error');
       }
     } catch (err: any) {
-      setError('Error converting speech to text');
+      // More detailed error logging
+      const errorMessage = err.message || 'Unknown error occurred';
+      setError(`Error converting speech to text: ${errorMessage}`);
       setStatus('');
-      console.error("Speech-to-text error:", err.message || err);
-      console.error("Error details:", err);
+      console.error("Speech-to-text error:", {
+        message: errorMessage,
+        error: err,
+        stack: err.stack
+      });
     }
   };
 
