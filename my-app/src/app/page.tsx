@@ -67,7 +67,7 @@ export default function TestClient() {
       const formData = new FormData();
       formData.append('audioData', audioBlob);
 
-      const response = await fetch('/api/speech-to-text', {
+      const response = await fetch('https://linkedin-voice-backend.vercel.app/api/speech-to-text', {
         method: 'POST',
         body: formData,
       });
@@ -91,7 +91,7 @@ export default function TestClient() {
   const handleOptimize = async () => {
     try {
       setStatus('Optimizing text...');
-      const response = await fetch('/api/optimizeSpeech', {
+      const response = await fetch('https://linkedin-voice-backend.vercel.app/api/optimizeSpeech', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcriptionId }),
@@ -116,7 +116,7 @@ export default function TestClient() {
   const handlePatch = async () => {
     try {
       setStatus('Saving changes...');
-      const response = await fetch('/api/editText', {
+      const response = await fetch('https://linkedin-voice-backend.vercel.app/api/editText', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

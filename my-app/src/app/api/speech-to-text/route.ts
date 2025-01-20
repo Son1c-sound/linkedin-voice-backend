@@ -9,6 +9,10 @@ const uri: string = process.env.MONGO_URI!
 const dbName: string = process.env.AUTH_DB_NAME!
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
+export async function OPTIONS() {
+  return NextResponse.json({}, { status: 200 })
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData()
@@ -16,7 +20,12 @@ export async function POST(req: Request) {
     const audioFile = formData.get('audioData')
     
     if (!audioFile || !(audioFile instanceof File)) {
-      return NextResponse.json({ error: "No valid audio file provided" }, { status: 400 })
+      return NextResponse.json(
+        { error: "No valid audio file provided" }, 
+        { 
+          status: 400,
+        }
+      )
     }
 
     const arrayBuffer = await audioFile.arrayBuffer()
@@ -49,6 +58,9 @@ export async function POST(req: Request) {
 
   } catch (error) {
     console.error("Speech to text error:", error)
-    return NextResponse.json({ error: "Failed to process audio" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to process audio" }, 
+      { status: 500 }
+    )
   }
 }
