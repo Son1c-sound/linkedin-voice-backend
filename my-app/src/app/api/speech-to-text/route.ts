@@ -2,7 +2,6 @@ import { audioSchema } from './../../../lib/validation'
 import { MongoClient } from "mongodb"
 import OpenAI from "openai"
 import { NextResponse } from "next/server"
-import axios from "axios"  // We can use axios to send raw data to the API
 
 const uri: string = process.env.MONGO_URI!
 const dbName: string = process.env.AUTH_DB_NAME!
@@ -24,20 +23,24 @@ export async function POST(req: Request) {
     const arrayBuffer = await audioFile.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)  // Convert the file to buffer
 
-    // Send the buffer directly to OpenAI API using axios
-    const response = await axios.post(
-      "https://api.openai.com/v1/audio/transcriptions",  // OpenAI API endpoint for transcriptions
-      buffer,
-      {
-        headers: {
-          'Content-Type': 'audio/wav',  // Set content type to match audio format
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        maxRedirects: 0,  // Optional: Disable redirects for this request
-      }
-    )
+    // Send the buffer directly to OpenAI API using native fetch
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'audio/wav',  // Set content type to match audio format
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: buffer,  // Send the raw buffer
+    })
 
-    const transcription = response.data
+    // Check if the response is ok
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error("OpenAI API error:", errorData)
+      return NextResponse.json({ error: "Failed to process audio" }, { status: 500 })
+    }
+
+    const transcription = await response.json()  // Parse the response from OpenAI
 
     const client = new MongoClient(uri)
     await client.connect()
