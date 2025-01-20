@@ -3,8 +3,6 @@ import { MongoClient } from "mongodb"
 import OpenAI from "openai"
 import { NextResponse } from "next/server"
 
-
-
 const uri: string = process.env.MONGO_URI!
 const dbName: string = process.env.AUTH_DB_NAME!
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -14,9 +12,11 @@ export async function POST(req: Request) {
     const formData = await req.formData()
     await audioSchema.validate({ audioData: formData.get('audioData') })
     const audioFile = formData.get('audioData')
-    
+
     if (!audioFile || !(audioFile instanceof File)) {
-      return NextResponse.json({ error: "No valid audio file provided" }, { status: 400 })
+      const errorMessage = "No valid audio file provided"
+      console.error(errorMessage)
+      return NextResponse.json({ error: errorMessage }, { status: 400 })
     }
 
     const arrayBuffer = await audioFile.arrayBuffer()
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     const client = new MongoClient(uri)
     await client.connect()
     const db = client.db(dbName)
-    
+
     const result = await db.collection("transcriptions").insertOne({
       text: transcription.text,
       createdAt: new Date(),
@@ -47,8 +47,20 @@ export async function POST(req: Request) {
       text: transcription.text 
     })
 
-  } catch (error) {
-    console.error("Speech to text error:", error)
+  } catch (error: any) {
+    // Detailed error logging
+    console.error("Speech to text error:", error.message)
+    
+    // If the error contains a stack trace, log it
+    if (error.stack) {
+      console.error("Stack trace:", error.stack)
+    }
+
+    // Optionally log the specific API failure (OpenAI, MongoDB, etc.)
+    if (error.response) {
+      console.error("API response error:", error.response)
+    }
+
     return NextResponse.json({ error: "Failed to process audio" }, { status: 500 })
   }
 }
