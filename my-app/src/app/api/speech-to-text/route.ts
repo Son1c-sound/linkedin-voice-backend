@@ -22,10 +22,12 @@ export async function POST(req: Request) {
     const arrayBuffer = await audioFile.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    const file = new File([buffer], 'audio.wav', { type: 'audio/wav' })
+    // Create a Blob to simulate the File-like object
+    const blob = new Blob([buffer], { type: 'audio/wav' })
+    const file = new File([blob], 'audio.wav', { type: 'audio/wav' })
 
     const transcription = await openai.audio.transcriptions.create({
-      file: file,
+      file: file, // Use the simulated File object
       model: "whisper-1",
     })
 

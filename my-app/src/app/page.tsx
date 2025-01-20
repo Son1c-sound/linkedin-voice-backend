@@ -1,7 +1,7 @@
 // "use client"
 // import React, { useState, useRef } from 'react';
 
-// export default function TestClient () {
+// const TestClient = () => {
 //   const [isRecording, setIsRecording] = useState(false);
 //   const [transcriptionId, setTranscriptionId] = useState('');
 //   const [originalText, setOriginalText] = useState('');
@@ -152,6 +152,7 @@
 //     </div>
 //   );
 // };
+
 
 
 import React from 'react'
