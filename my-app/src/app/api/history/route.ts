@@ -51,10 +51,10 @@ export async function GET() {
 
 export async function DELETE(req: Request) {
   try {
-    const { searchParams } = new URL(req.url)
-    const id = searchParams.get('id')
+    const body = await req.json()
+    const transcriptionId = body.transcriptionId
 
-    if (!id) {
+    if (!transcriptionId) {
       return NextResponse.json(
         { error: "ID is required" },
         { 
@@ -69,7 +69,7 @@ export async function DELETE(req: Request) {
     const db = client.db(dbName)
 
     const result = await db.collection("transcriptions").deleteOne({
-      _id: new ObjectId(id)
+      _id: new ObjectId(transcriptionId)
     })
 
     await client.close()
