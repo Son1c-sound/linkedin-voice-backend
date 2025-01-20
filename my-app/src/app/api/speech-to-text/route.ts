@@ -7,7 +7,6 @@ const uri: string = process.env.MONGO_URI!
 const dbName: string = process.env.AUTH_DB_NAME!
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
@@ -19,6 +18,7 @@ export async function OPTIONS() {
     },
   })
 }
+
 const corsHeaders = {
   'Access-Control-Allow-Credentials': 'true',
   'Access-Control-Allow-Origin': '*',
@@ -28,19 +28,56 @@ const corsHeaders = {
 
 export async function POST(req: Request) {
   try {
-    // Add CORS headers to the response
-  
     const formData = await req.formData();
-    await audioSchema.validate({ audioData: formData.get('audioData') });
-    const audioFile = formData.get('audioData');
+    const audioData = formData.get('audioData');
     
-    if (!audioFile || !(audioFile instanceof File)) {
+    console.log("Received audio data type:", typeof audioData);
+    console.log("Audio data properties:", Object.keys(audioData || {}));
+
+    let audioFile;
+    
+    if (audioData instanceof File) {
+      // Web browser upload
+      console.log("Processing web browser upload");
+      audioFile = audioData;
+    } else if (audioData && typeof audioData === 'object') {
+      // Mobile upload
+      console.log("Processing mobile upload");
+      const mobileData = audioData as any;
+      
+      try {
+        // Check if we have direct binary data
+        if (mobileData.arrayBuffer) {
+          const buffer = await mobileData.arrayBuffer();
+          audioFile = new File([buffer], 'audio.wav', { 
+            type: 'audio/wav'
+          });
+        } 
+        // Check if we have a URI (common in React Native)
+        else if (mobileData.uri) {
+          const response = await fetch(mobileData.uri);
+          const blob = await response.blob();
+          audioFile = new File([blob], 'audio.wav', {
+            type: mobileData.type || 'audio/wav'
+          });
+        } else {
+          throw new Error("Unrecognized audio data format");
+        }
+      } catch (error:any) {
+        console.error("Error processing mobile audio:", error);
+        throw new Error(`Failed to process mobile audio: ${error.message}`);
+      }
+    }
+
+    if (!audioFile) {
+      console.log("No valid audio file found in request");
       return NextResponse.json({ 
         success: false, 
         error: "No valid audio file provided",
         details: { 
-          receivedType: audioFile ? typeof audioFile : 'null',
-          isFile: audioFile 
+          receivedType: typeof audioData,
+          isFile: audioData instanceof File,
+          properties: audioData ? Object.keys(audioData) : []
         }
       }, { 
         status: 400,
@@ -49,6 +86,7 @@ export async function POST(req: Request) {
     }
 
     if (audioFile.size === 0) {
+      console.log("Audio file is empty");
       return NextResponse.json({ 
         success: false, 
         error: "Audio file is empty",
@@ -59,16 +97,20 @@ export async function POST(req: Request) {
       });
     }
 
+    // Prepare file for OpenAI
+    console.log("Preparing file for OpenAI, size:", audioFile.size);
     const arrayBuffer = await audioFile.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const file = new File([buffer], 'audio.wav', { type: 'audio/wav' });
 
     try {
+      console.log("Sending to OpenAI transcription API");
       const transcription = await openai.audio.transcriptions.create({
         file: file,
         model: "whisper-1",
       });
 
+      console.log("Transcription received, saving to database");
       const client = new MongoClient(uri);
       await client.connect();
       const db = client.db(dbName);
@@ -80,6 +122,7 @@ export async function POST(req: Request) {
       });
 
       await client.close();
+      console.log("Successfully processed and saved transcription");
 
       return NextResponse.json({ 
         success: true, 
