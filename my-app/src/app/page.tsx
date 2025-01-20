@@ -48,9 +48,9 @@ export default function TestClient() {
       mediaRecorder.current.start();
       setIsRecording(true);
       setStatus('Recording...');
-    } catch (err) {
+    } catch (err: any) {
       setError('Error accessing microphone');
-      console.error(err);
+      console.error("Microphone access error:", err.message || err);
     }
   };
 
@@ -80,9 +80,11 @@ export default function TestClient() {
       } else {
         throw new Error(data.error || 'Unknown error');
       }
-    } catch (err) {
+    } catch (err: any) {
       setError('Error converting speech to text');
       setStatus('');
+      console.error("Speech-to-text error:", err.message || err);
+      console.error("Error details:", err);
     }
   };
 
@@ -103,9 +105,11 @@ export default function TestClient() {
       } else {
         throw new Error(data.error || 'Unknown error');
       }
-    } catch (err) {
+    } catch (err: any) {
       setError('Error optimizing text');
       setStatus('');
+      console.error("Text optimization error:", err.message || err);
+      console.error("Error details:", err);
     }
   };
 
@@ -127,9 +131,11 @@ export default function TestClient() {
       } else {
         throw new Error(data.error || 'Unknown error');
       }
-    } catch (err) {
+    } catch (err: any) {
       setError('Error saving changes');
       setStatus('');
+      console.error("Save changes error:", err.message || err);
+      console.error("Error details:", err);
     }
   };
 
