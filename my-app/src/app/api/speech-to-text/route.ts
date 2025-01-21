@@ -31,8 +31,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { audioData, fileName, fileType } = body;
     
-    console.log("Received request with file type:", fileType);
-
     if (!audioData) {
       return NextResponse.json({
         success: false,
@@ -43,15 +41,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // Convert base64 to buffer
     const buffer = Buffer.from(audioData, 'base64');
     const audioFile = new File([buffer], fileName, { type: fileType });
-
-    console.log("Created file:", {
-      size: audioFile.size,
-      type: audioFile.type,
-      name: audioFile.name
-    });
 
     const transcription = await openai.audio.transcriptions.create({
       file: audioFile,
