@@ -28,103 +28,71 @@ const corsHeaders = {
 
 export async function POST(req: Request) {
   try {
-    // Add CORS headers to the response
-  
-    const formData = await req.formData();
-    await audioSchema.validate({ audioData: formData.get('audioData') });
-    const audioFile = formData.get('audioData');
+    const body = await req.json();
+    const { audioData, fileName, fileType } = body;
     
-    if (!audioFile || !(audioFile instanceof File)) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "No valid audio file provided",
-        details: { 
-          receivedType: audioFile ? typeof audioFile : 'null',
-          isFile: audioFile 
-        }
-      }, { 
-        status: 400,
-        headers: corsHeaders
-      });
-    }
+    console.log("Received request with file type:", fileType);
 
-    if (audioFile.size === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Audio file is empty",
-        details: { fileSize: audioFile.size }
-      }, { 
-        status: 400,
-        headers: corsHeaders
-      });
-    }
-
-    const arrayBuffer = await audioFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const file = new File([buffer], 'audio.wav', { type: 'audio/wav' });
-
-    try {
-      const transcription = await openai.audio.transcriptions.create({
-        file: file,
-        model: "whisper-1",
-      });
-
-      const client = new MongoClient(uri);
-      await client.connect();
-      const db = client.db(dbName);
-      
-      const result = await db.collection("transcriptions").insertOne({
-        text: transcription.text,
-        createdAt: new Date(),
-        status: "raw"
-      });
-
-      await client.close();
-
-      return NextResponse.json({ 
-        success: true, 
-        transcriptionId: result.insertedId,
-        text: transcription.text 
+    if (!audioData) {
+      return NextResponse.json({
+        success: false,
+        error: "No audio data provided"
       }, {
-        headers: corsHeaders
-      });
-
-    } catch (openAiError: any) {
-      console.error("OpenAI API error:", {
-        message: openAiError.message,
-        details: openAiError.response?.data || openAiError
-      });
-      
-      return NextResponse.json({ 
-        success: false, 
-        error: "Failed to process audio with OpenAI",
-        details: {
-          message: openAiError.message,
-          type: openAiError.type,
-          statusCode: openAiError.status
-        }
-      }, { 
-        status: 500,
+        status: 400,
         headers: corsHeaders
       });
     }
+
+    // Convert base64 to buffer
+    const buffer = Buffer.from(audioData, 'base64');
+    const audioFile = new File([buffer], fileName, { type: fileType });
+
+    console.log("Created file:", {
+      size: audioFile.size,
+      type: audioFile.type,
+      name: audioFile.name
+    });
+
+    const transcription = await openai.audio.transcriptions.create({
+      file: audioFile,
+      model: "whisper-1",
+    });
+
+    const client = new MongoClient(uri);
+    await client.connect();
+    const db = client.db(dbName);
+    
+    const result = await db.collection("transcriptions").insertOne({
+      text: transcription.text,
+      createdAt: new Date(),
+      status: "raw"
+    });
+
+    await client.close();
+
+    return NextResponse.json({ 
+      success: true, 
+      transcriptionId: result.insertedId,
+      text: transcription.text 
+    }, {
+      headers: corsHeaders
+    });
 
   } catch (error: any) {
-    console.error("Speech to text error:", {
+    console.error("Processing error:", {
       message: error.message,
       stack: error.stack,
       details: error
     });
     
-    return NextResponse.json({ 
-      success: false, 
+    return NextResponse.json({
+      success: false,
       error: "Failed to process audio",
       details: {
         message: error.message,
-        type: error.name,
-        validation: error.errors
+        type: error.name
       }
-    }, { 
+    }, {
       status: 500,
       headers: corsHeaders
     });
