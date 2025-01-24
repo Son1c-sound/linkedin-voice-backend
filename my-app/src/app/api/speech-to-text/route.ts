@@ -67,7 +67,7 @@ export async function POST(req: Request) {
         error: "No tokens remaining"
       }, { status: 429, headers: corsHeaders });
     } else {
-      await db.collection("transcriptions").updateOne(
+      await db.collection("users").updateOne(
         { userId: body.userId },
         { $inc: { tokens: -1 }}
       )
