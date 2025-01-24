@@ -1,4 +1,3 @@
-import { audioSchema } from './../../../lib/validation'
 import { MongoClient } from "mongodb"
 import OpenAI from "openai"
 import { NextResponse } from "next/server"
@@ -56,7 +55,8 @@ export async function POST(req: Request) {
     const result = await db.collection("transcriptions").insertOne({
       text: transcription.text,
       createdAt: new Date(),
-      status: "raw"
+      status: "raw",
+      userId: body.userId
     });
 
     await client.close();
