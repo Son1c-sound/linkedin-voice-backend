@@ -12,7 +12,13 @@ export const editSchema = yup.object({
 
 export const optimizeSchema = yup.object({
   transcriptionId: yup.string()
-    .required('Transcription ID is required')
+    .required('Transcription ID is required'),
+  optimizedContent: yup.string().nullable(),
+  hashtags: yup.array().of(yup.string()).nullable(),
+  tone: yup.string().nullable(),
+  targetAudience: yup.string().nullable(),
+  status: yup.string().oneOf(['pending', 'optimized', 'failed']).default('pending'),
+  updatedAt: yup.date().default(() => new Date())
 });
 
 export const audioSchema = yup.object({

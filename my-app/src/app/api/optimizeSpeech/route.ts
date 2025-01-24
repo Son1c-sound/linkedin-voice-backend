@@ -51,26 +51,26 @@ export async function POST(req: Request) {
      messages: [
       {
         role: "system",
-        content: `You are an expert LinkedIn content strategist. Transform posts into engaging, professional content while:
-        - Maintaining authentic voice and core message
-        - Adding compelling hooks and calls-to-action
-        - Using natural language and conversational tone
-        - Including strategic line breaks for readability
-        - Suggesting relevant hashtags separately
+        content: `You MUST return a JSON response in exactly this format, with no other text:
+{
+"optimizedContent": "The enhanced LinkedIn post text",
+"hashtags": ["relevant", "hashtags"],
+"tone": "Professional yet conversational",
+"targetAudience": "Primary audience"
+}
 
-        Return JSON in this format:
-        {
-          "optimizedContent": "The enhanced post text",
-          "hashtags": ["list", "of", "relevant", "hashtags"],
-          "tone": "Professional yet conversational",
-          "targetAudience": "Identified primary audience"
-        }`
+Transform the input into an engaging LinkedIn post while:
+- Maintaining authentic voice
+- Adding hooks and calls-to-action
+- Using natural tone
+- Including strategic line breaks
+- Suggesting relevant hashtags`
       },
       {
         role: "user",
-        content: transcription.text
+        content: transcription.text ?? ''
       }
-    ]
+    ],
    })
 
    const response = JSON.parse(completion.choices[0].message.content || '')
