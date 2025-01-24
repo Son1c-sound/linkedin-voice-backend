@@ -17,7 +17,7 @@ export async function OPTIONS() {
    status: 204,
    headers: corsHeaders
  })
-}cd   
+}
 
 export async function PATCH(req: Request) {
    try {
