@@ -21,36 +21,25 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    
-    const client = new MongoClient(uri)
-    await client.connect()
-    const db = client.db(dbName)
-    
+    const client = new MongoClient(uri);
+    await client.connect();
+    const db = client.db(dbName);
+ 
     const result = await db.collection("users").insertOne({
-      email: body.email,
       userId: body.userId,
-      first_name: body.first_name,
+      tokens: 25, 
+      isPremium: false,
       createdAt: new Date()
-    })
-    
-    await client.close()
-    
-    return NextResponse.json({
+    });
+ 
+    await client.close();
+    return NextResponse.json({ 
       success: true,
-      message: "User created successfully",
-      userId: result.insertedId
-    }, {
-      headers: corsHeaders
-    })
-
+      userId: result.insertedId,
+      message: "User created"  
+    }, { headers: corsHeaders });
   } catch (error) {
-    console.error("POST error:", error)
-    return NextResponse.json(
-      { error: "Failed to create user" },
-      {
-        status: 500,
-        headers: corsHeaders
-      }
-    )
+    console.error("POST error:", error);
+    return NextResponse.json({ error: "Failed to create user" }, { status: 500, headers: corsHeaders });
   }
-}
+ }
