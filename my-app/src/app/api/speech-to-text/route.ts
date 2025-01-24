@@ -50,7 +50,28 @@ export async function POST(req: Request) {
 
     const client = new MongoClient(uri);
     await client.connect();
-    const db = client.db(dbName);
+    const db = client.db(dbName)
+
+
+    const userDoc = await db.collection("users").findOne({ userId: body.userId });
+    if (!userDoc) {
+      await db.collection("users").insertOne({
+        userId: body.userId,
+        tokens: 25,
+        isPremium: false
+      })
+    } else if (userDoc.tokens <= 0 && !userDoc.isPremium) {
+      await client.close();
+      return NextResponse.json({
+        success: false,
+        error: "No tokens remaining"
+      }, { status: 429, headers: corsHeaders });
+    } else {
+      await db.collection("transcriptions").updateOne(
+        { userId: body.userId },
+        { $inc: { tokens: -1 }}
+      )
+    }
     
     const result = await db.collection("transcriptions").insertOne({
       text: transcription.text,

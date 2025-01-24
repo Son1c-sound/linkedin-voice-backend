@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     await client.connect()
     const db = client.db(dbName)
     
-    const result = await db.collection("transcriptions").insertOne({
+    const result = await db.collection("users").insertOne({
       email: body.email,
       userId: body.userId,
       first_name: body.first_name,
