@@ -31,7 +31,7 @@ export async function PATCH(req: Request) {
      const _id = new ObjectId(validData.transcriptionId)
  
      const result = await db.collection("transcriptions").updateOne(
-       { _id },
+       { _id, userId: body.userId },
        { 
          $set: { 
            optimizedText: validData.updatedText,
