@@ -11,8 +11,10 @@ export const editSchema = yup.object({
 });
 
 export const optimizeSchema = yup.object({
-  transcriptionId: yup.string()
-    .required('Transcription ID is required')
+  transcriptionId: yup.string().required('Transcription ID is required'),
+  platforms: yup.array().of(
+    yup.string().oneOf(['linkedin', 'twitter', 'reddit'])
+  ).optional()
 });
 
 export const audioSchema = yup.object({
