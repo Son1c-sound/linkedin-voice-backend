@@ -13,7 +13,7 @@ interface Transcription {
   _id: ObjectId
   text: string
   optimizations: Record<Platform, string>
-  status: 'pending' | 'optimized' | 'failed'
+  status: 'pending' | 'in_progress' | 'optimized' | 'failed' 
   createdAt: Date
   updatedAt: Date
 }
@@ -79,11 +79,10 @@ export async function POST(req: Request) {
     const body = await req.json() as OptimizeRequest;
     const validatedBody = await optimizeSchema.validate(body) as ValidatedRequest;
     const { transcriptionId } = validatedBody;
-    const platforms = body.platforms || ['linkedin', 'twitter', 'reddit'] as Platform[];
     
-    const client = new MongoClient(uri)
-    await client.connect()
-    const db = client.db(dbName)
+    const client = new MongoClient(uri);
+    await client.connect();
+    const db = client.db(dbName);
     
     const _id = new ObjectId(transcriptionId);
     const transcription = await db.collection<Transcription>("transcriptions").findOne({ _id });
@@ -96,40 +95,75 @@ export async function POST(req: Request) {
       );
     }
 
-    const optimizations: Record<Platform, string> = {} as Record<Platform, string>;
+    // Start optimization for first platform immediately (usually LinkedIn)
+    const platform = 'linkedin' as Platform;
+    const optimizedText = await optimizeForPlatform(transcription.text, platform);
     
-    await Promise.all(
-      platforms.map(async (platform) => {
-        optimizations[platform] = await optimizeForPlatform(transcription.text, platform)
-      })
-    );
+    // Save first result and queue others for background processing
+    const optimizations = {
+      [platform]: optimizedText
+    } as Record<Platform, string>;
 
+    // Save partial results and mark as in_progress
     await db.collection<Transcription>("transcriptions").updateOne(
       { _id },
       {
         $set: {
           optimizations,
-          status: "optimized",
+          status: "in_progress",
           updatedAt: new Date()
         }
       }
-    )
+    );
 
-    await client.close()
+    // Start background processing for other platforms
+    const otherPlatforms = ['twitter', 'reddit'] as Platform[];
+    Promise.all(
+      otherPlatforms.map(async (platform) => {
+        try {
+          const result = await optimizeForPlatform(transcription.text, platform);
+          await db.collection<Transcription>("transcriptions").updateOne(
+            { _id },
+            {
+              $set: {
+                [`optimizations.${platform}`]: result,
+                updatedAt: new Date()
+              }
+            }
+          );
+        } catch (error) {
+          console.error(`Error optimizing for ${platform}:`, error);
+        }
+      })
+    ).then(async () => {
+      // Mark as completed when all done
+      await db.collection<Transcription>("transcriptions").updateOne(
+        { _id },
+        {
+          $set: {
+            status: "optimized",
+            updatedAt: new Date()
+          }
+        }
+      );
+    });
+
+    await client.close();
     
+    // Return immediately with first platform result
     return NextResponse.json<OptimizeResponse>(
       {
         success: true,
         optimizations
       },
       { headers: corsHeaders }
-    )
+    );
     
   } catch (error) {
-    console.error("Optimization error:", error)
+    console.error("Optimization error:", error);
     return NextResponse.json<OptimizeResponse>(
       { success: false, error: "Failed to optimize text" },
       { status: 500, headers: corsHeaders }
-    )
+    );
   }
 }
