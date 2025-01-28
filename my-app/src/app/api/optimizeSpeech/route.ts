@@ -75,12 +75,12 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: Request) {
+  const client = new MongoClient(uri);
   try {
     const body = await req.json() as OptimizeRequest;
     const validatedBody = await optimizeSchema.validate(body) as ValidatedRequest;
     const { transcriptionId } = validatedBody;
     
-    const client = new MongoClient(uri);
     await client.connect();
     const db = client.db(dbName);
     
@@ -88,23 +88,19 @@ export async function POST(req: Request) {
     const transcription = await db.collection<Transcription>("transcriptions").findOne({ _id });
     
     if (!transcription) {
-      await client.close();
       return NextResponse.json<OptimizeResponse>(
         { success: false, error: "Transcription not found" },
         { status: 404, headers: corsHeaders }
       );
     }
 
-    // Start optimization for first platform immediately (usually LinkedIn)
     const platform = 'linkedin' as Platform;
     const optimizedText = await optimizeForPlatform(transcription.text, platform);
     
-    // Save first result and queue others for background processing
     const optimizations = {
       [platform]: optimizedText
     } as Record<Platform, string>;
 
-    // Save partial results and mark as in_progress
     await db.collection<Transcription>("transcriptions").updateOne(
       { _id },
       {
@@ -116,9 +112,8 @@ export async function POST(req: Request) {
       }
     );
 
-    // Start background processing for other platforms
     const otherPlatforms = ['twitter', 'reddit'] as Platform[];
-    Promise.all(
+    await Promise.all(
       otherPlatforms.map(async (platform) => {
         try {
           const result = await optimizeForPlatform(transcription.text, platform);
@@ -136,7 +131,6 @@ export async function POST(req: Request) {
         }
       })
     ).then(async () => {
-      // Mark as completed when all done
       await db.collection<Transcription>("transcriptions").updateOne(
         { _id },
         {
@@ -147,10 +141,7 @@ export async function POST(req: Request) {
         }
       );
     });
-
-    await client.close();
     
-    // Return immediately with first platform result
     return NextResponse.json<OptimizeResponse>(
       {
         success: true,
@@ -165,5 +156,7 @@ export async function POST(req: Request) {
       { success: false, error: "Failed to optimize text" },
       { status: 500, headers: corsHeaders }
     );
+  } finally {
+    await client.close();
   }
 }
