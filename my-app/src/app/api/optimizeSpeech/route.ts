@@ -94,13 +94,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const platform = 'linkedin' as Platform;
-    const optimizedText = await optimizeForPlatform(transcription.text, platform);
+    // Start all optimizations in parallel
+    const platforms: Platform[] = ['linkedin', 'twitter', 'reddit'];
+    const optimizationPromises = platforms.map(platform => 
+      optimizeForPlatform(transcription.text, platform)
+    );
+
+    // Get LinkedIn result first
+    const [linkedinResult, ...otherResults] = await Promise.all(optimizationPromises);
     
+    // Initial optimizations with LinkedIn
     const optimizations = {
-      [platform]: optimizedText
+      linkedin: linkedinResult
     } as Record<Platform, string>;
 
+    // Save initial state
     await db.collection<Transcription>("transcriptions").updateOne(
       { _id },
       {
@@ -112,36 +120,21 @@ export async function POST(req: Request) {
       }
     );
 
-    const otherPlatforms = ['twitter', 'reddit'] as Platform[];
-    await Promise.all(
-      otherPlatforms.map(async (platform) => {
-        try {
-          const result = await optimizeForPlatform(transcription.text, platform);
-          await db.collection<Transcription>("transcriptions").updateOne(
-            { _id },
-            {
-              $set: {
-                [`optimizations.${platform}`]: result,
-                updatedAt: new Date()
-              }
-            }
-          );
-        } catch (error) {
-          console.error(`Error optimizing for ${platform}:`, error);
-        }
-      })
-    ).then(async () => {
+    // Continue processing others in background
+    Promise.all(otherResults).then(async ([twitterResult, redditResult]) => {
       await db.collection<Transcription>("transcriptions").updateOne(
         { _id },
         {
           $set: {
+            'optimizations.twitter': twitterResult,
+            'optimizations.reddit': redditResult,
             status: "optimized",
             updatedAt: new Date()
           }
         }
       );
     });
-    
+
     return NextResponse.json<OptimizeResponse>(
       {
         success: true,
