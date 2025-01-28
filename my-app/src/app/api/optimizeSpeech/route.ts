@@ -13,7 +13,7 @@ interface Transcription {
   _id: ObjectId
   text: string
   optimizations: Record<Platform, string>
-  status: 'pending' | 'in_progress' | 'optimized' | 'failed' 
+  status: 'pending' | 'optimized' | 'failed'
   createdAt: Date
   updatedAt: Date
 }
@@ -75,81 +75,61 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: Request) {
-  const client = new MongoClient(uri);
   try {
     const body = await req.json() as OptimizeRequest;
     const validatedBody = await optimizeSchema.validate(body) as ValidatedRequest;
     const { transcriptionId } = validatedBody;
+    const platforms = body.platforms || ['linkedin', 'twitter', 'reddit'] as Platform[];
     
-    await client.connect();
-    const db = client.db(dbName);
+    const client = new MongoClient(uri)
+    await client.connect()
+    const db = client.db(dbName)
     
     const _id = new ObjectId(transcriptionId);
     const transcription = await db.collection<Transcription>("transcriptions").findOne({ _id });
     
     if (!transcription) {
+      await client.close();
       return NextResponse.json<OptimizeResponse>(
         { success: false, error: "Transcription not found" },
         { status: 404, headers: corsHeaders }
       );
     }
 
-    // Start all optimizations in parallel
-    const platforms: Platform[] = ['linkedin', 'twitter', 'reddit'];
-    const optimizationPromises = platforms.map(platform => 
-      optimizeForPlatform(transcription.text, platform)
+    const optimizations: Record<Platform, string> = {} as Record<Platform, string>;
+    
+    await Promise.all(
+      platforms.map(async (platform) => {
+        optimizations[platform] = await optimizeForPlatform(transcription.text, platform)
+      })
     );
 
-    // Get LinkedIn result first
-    const [linkedinResult, ...otherResults] = await Promise.all(optimizationPromises);
-    
-    // Initial optimizations with LinkedIn
-    const optimizations = {
-      linkedin: linkedinResult
-    } as Record<Platform, string>;
-
-    // Save initial state
     await db.collection<Transcription>("transcriptions").updateOne(
       { _id },
       {
         $set: {
           optimizations,
-          status: "in_progress",
+          status: "optimized",
           updatedAt: new Date()
         }
       }
-    );
+    )
 
-    // Continue processing others in background
-    Promise.all(otherResults).then(async ([twitterResult, redditResult]) => {
-      await db.collection<Transcription>("transcriptions").updateOne(
-        { _id },
-        {
-          $set: {
-            'optimizations.twitter': twitterResult,
-            'optimizations.reddit': redditResult,
-            status: "optimized",
-            updatedAt: new Date()
-          }
-        }
-      );
-    });
-
+    await client.close()
+    
     return NextResponse.json<OptimizeResponse>(
       {
         success: true,
         optimizations
       },
       { headers: corsHeaders }
-    );
+    )
     
   } catch (error) {
-    console.error("Optimization error:", error);
+    console.error("Optimization error:", error)
     return NextResponse.json<OptimizeResponse>(
       { success: false, error: "Failed to optimize text" },
       { status: 500, headers: corsHeaders }
-    );
-  } finally {
-    await client.close();
+    )
   }
 }
