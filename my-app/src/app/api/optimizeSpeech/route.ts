@@ -3,6 +3,10 @@ import OpenAI from "openai"
 import { NextResponse } from "next/server"
 import { optimizeSchema } from "@/lib/validation"
 
+export const config = {
+  maxDuration: 60, 
+};
+
 type Platform = 'linkedin' | 'twitter' | 'reddit'
 
 interface Transcription {
