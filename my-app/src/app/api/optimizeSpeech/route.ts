@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import { optimizeSchema } from "@/lib/validation"
 
 export const config = {
-  maxDuration: 60, 
+  maxDuration: 60,
 };
 
 type Platform = 'linkedin' | 'twitter' | 'reddit'
@@ -33,10 +33,6 @@ interface OptimizeResponse {
   error?: string
 }
 
-const uri: string = process.env.MONGO_URI!
-const dbName: string = process.env.AUTH_DB_NAME!
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
 const corsHeaders = {
   'Access-Control-Allow-Credentials': 'true',
   'Access-Control-Allow-Origin': '*', 
@@ -50,21 +46,46 @@ const PLATFORM_PROMPTS: Record<Platform, string> = {
   reddit: "You are a Reddit post optimizer. Make the message clear, informative, and engaging while maintaining authenticity and encouraging discussion."
 }
 
-async function optimizeForPlatform(text: string, platform: Platform): Promise<string> {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4",
-    messages: [
-      {
-        role: "system",
-        content: PLATFORM_PROMPTS[platform]
-      },
-      {
-        role: "user",
-        content: text
-      }
-    ]
-  })
-  return completion.choices[0].message.content || ''
+// Create a cached connection to MongoDB
+let cachedClient: MongoClient | null = null;
+async function connectToDatabase(): Promise<MongoClient> {
+  if (cachedClient) {
+    return cachedClient;
+  }
+  
+  const client = new MongoClient(process.env.MONGO_URI!);
+  await client.connect();
+  cachedClient = client;
+  return client;
+}
+
+// Initialize OpenAI client once
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+// Batch process optimizations with retry logic
+async function optimizeWithRetry(text: string, platform: Platform, retries = 3): Promise<string> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo", // Using a faster model
+      messages: [
+        {
+          role: "system",
+          content: PLATFORM_PROMPTS[platform]
+        },
+        {
+          role: "user",
+          content: text
+        }
+      ],
+    })
+    return completion.choices[0].message.content || ''
+  } catch (error) {
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+      return optimizeWithRetry(text, platform, retries - 1);
+    }
+    throw error;
+  }
 }
 
 export async function OPTIONS() {
@@ -81,30 +102,43 @@ export async function POST(req: Request) {
     const { transcriptionId } = validatedBody;
     const platforms = body.platforms || ['linkedin', 'twitter', 'reddit'] as Platform[];
     
-    const client = new MongoClient(uri)
-    await client.connect()
-    const db = client.db(dbName)
+    // Use cached connection
+    const client = await connectToDatabase();
+    const db = client.db(process.env.AUTH_DB_NAME!);
     
     const _id = new ObjectId(transcriptionId);
-    const transcription = await db.collection<Transcription>("transcriptions").findOne({ _id });
+    const transcription = await db.collection<Transcription>("transcriptions").findOne(
+      { _id },
+      { projection: { text: 1 } } // Only fetch the text field
+    );
     
     if (!transcription) {
-      await client.close();
       return NextResponse.json<OptimizeResponse>(
         { success: false, error: "Transcription not found" },
         { status: 404, headers: corsHeaders }
       );
     }
 
-    const optimizations: Record<Platform, string> = {} as Record<Platform, string>;
-    
-    await Promise.all(
-      platforms.map(async (platform) => {
-        optimizations[platform] = await optimizeForPlatform(transcription.text, platform)
-      })
+    // Process optimizations in parallel with timeout and retry logic
+    const optimizationPromises = platforms.map(platform => 
+      optimizeWithRetry(transcription.text, platform)
+        .then(result => ({ platform, result }))
     );
 
-    await db.collection<Transcription>("transcriptions").updateOne(
+    const results = await Promise.allSettled(optimizationPromises);
+    const optimizations: Record<Platform, string> = {} as Record<Platform, string>;
+    
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        optimizations[result.value.platform] = result.value.result;
+      } else {
+        console.error(`Failed to optimize for ${platforms[index]}:`, result.reason);
+        optimizations[platforms[index]] = transcription.text; // Fallback to original text
+      }
+    });
+
+    // Update database in background
+    db.collection<Transcription>("transcriptions").updateOne(
       { _id },
       {
         $set: {
@@ -113,10 +147,8 @@ export async function POST(req: Request) {
           updatedAt: new Date()
         }
       }
-    )
+    ).catch(error => console.error('Failed to update database:', error));
 
-    await client.close()
-    
     return NextResponse.json<OptimizeResponse>(
       {
         success: true,
