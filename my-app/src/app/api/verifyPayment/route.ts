@@ -21,18 +21,20 @@ export async function OPTIONS() {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
+    const { userId, status } = body;
     
     const client = new MongoClient(uri)
     await client.connect()
     const db = client.db(dbName)
 
+    const updateValues = status === 'active' 
+      ? { isPremium: true, tokens: 2000 }
+      : { isPremium: false, tokens: 0 };
+
     const result = await db.collection("users").updateOne(
-      { _id: body.userId },
+      { _id: userId },
       {
-        $set: {
-          isPremium: true,
-          tokens: 2000
-        }
+        $set: updateValues
       }
     )
 
@@ -50,7 +52,7 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "User updated successfully"
+      message: `User ${status === 'active' ? 'activated' : 'deactivated'} successfully`
     }, {
       headers: corsHeaders
     })
