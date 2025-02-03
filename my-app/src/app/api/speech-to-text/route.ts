@@ -6,7 +6,6 @@ const uri: string = process.env.MONGO_URI!
 const dbName: string = process.env.AUTH_DB_NAME!
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
@@ -18,6 +17,7 @@ export async function OPTIONS() {
     },
   })
 }
+
 const corsHeaders = {
   'Access-Control-Allow-Credentials': 'true',
   'Access-Control-Allow-Origin': '*',
@@ -50,30 +50,8 @@ export async function POST(req: Request) {
 
     const client = new MongoClient(uri);
     await client.connect();
-    const db = client.db(dbName)
+    const db = client.db(dbName);
 
-
-    const userDoc = await db.collection("users").findOne({ userId: body.userId });
-    if (!userDoc) {
-      return NextResponse.json({
-        success: false,
-        error: "User not found"
-      }, { status: 404, headers: corsHeaders });
-    }
-    
-    if (userDoc.tokens <= 0 && !userDoc.isPremium) {
-      await client.close();
-      return NextResponse.json({
-        success: false,
-        error: "No tokens remaining"
-      }, { status: 429, headers: corsHeaders });
-    }
-    
-    await db.collection("users").updateOne(
-      { userId: body.userId },
-      { $inc: { tokens: -1 }}
-    );
-    
     const result = await db.collection("transcriptions").insertOne({
       text: transcription.text,
       createdAt: new Date(),
