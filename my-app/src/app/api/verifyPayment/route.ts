@@ -32,7 +32,7 @@ export async function PATCH(req: Request) {
       : { isPremium: false, tokens: 0 };
 
     const result = await db.collection("users").updateOne(
-      { _id: userId },
+      {  userId: userId },
       {
         $set: updateValues
       }
